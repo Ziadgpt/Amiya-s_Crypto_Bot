@@ -44,7 +44,7 @@ def fetch_data(market='BTC-USD', timeframe=CANDLE_RESOLUTION, limit=200, indexer
                 response = requests.get(url, params=params, timeout=10)
                 response.raise_for_status()
                 data = response.json()
-                logger.info(f"Raw API response for {mkt} with {tf}: {data}")
+                logger.info(f"Raw API response for {mkt}: {data}")
                 if return_raw:
                     return data
                 candles = data.get('candles', [])
@@ -52,7 +52,6 @@ def fetch_data(market='BTC-USD', timeframe=CANDLE_RESOLUTION, limit=200, indexer
                     logger.warning(f"No candles returned for {mkt} at {url} with {tf}")
                     print(f"No candles returned for {mkt} at {url} with {tf}")
                     continue
-                # Convert to DataFrame with explicit column check
                 df = pd.DataFrame([{
                     'started_at': candle.get('startedAt', pd.NaT),
                     'open': float(candle.get('open', 0)),
