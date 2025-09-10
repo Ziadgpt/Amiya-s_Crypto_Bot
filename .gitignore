@@ -1,0 +1,50 @@
+# Python
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Virtual Environment
+.venv/
+env/
+venv/
+ENV/
+
+# Logs
+*.log
+data_pipeline.log
+bot.log
+formula_7.log
+hmm_regime.log
+
+# SQLite Database
+crypto_data.db
+
+# CSVs and Temporary Files
+*.csv
+*.bak
+*.swp
+*~
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# macOS
+.DS_Store
+
+# Project-Specific
+v4-clients/
+
+# Sensitive Data
+*.env
+*.key
+*.pem
+*.secret
