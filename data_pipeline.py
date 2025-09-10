@@ -30,11 +30,10 @@ def get_available_markets(indexer_url=INDEXER_URL):
         print(f"Error fetching markets from {indexer_url}: {e}")
         return []
 
-def fetch_data(market='BTC-USD', timeframe=CANDLE_RESOLUTION, limit=200, indexer_url=INDEXER_URL):
+def fetch_data(market='BTC-USD', timeframe=CANDLE_RESOLUTION, limit=200, indexer_url=INDEXER_URL, return_raw=False):
     """Fetch OHLCV candles from dYdX v4 mainnet via REST API."""
-    timeframes = [timeframe, '1MIN']  # Fallback to 1MIN if 5MINS fails
+    timeframes = [timeframe, '1MIN']
     markets_to_try = [market, market.replace('USD', 'USDT'), 'LINK-USD', 'MATIC-USD']
-    # Set date range for recent data (last 1 day)
     to_iso = datetime.utcnow().isoformat() + 'Z'
     from_iso = (datetime.utcnow() - timedelta(days=1)).isoformat() + 'Z'
     for mkt in markets_to_try:
@@ -44,20 +43,28 @@ def fetch_data(market='BTC-USD', timeframe=CANDLE_RESOLUTION, limit=200, indexer
             try:
                 response = requests.get(url, params=params, timeout=10)
                 response.raise_for_status()
-                data = response.json().get('candles', [])
-                if not data:
-                    logger.warning(f"No data returned for {mkt} at {url} with {tf}")
-                    print(f"No data returned for {mkt} at {url} with {tf}")
+                data = response.json()
+                logger.info(f"Raw API response for {mkt} with {tf}: {data}")
+                if return_raw:
+                    return data
+                candles = data.get('candles', [])
+                if not candles:
+                    logger.warning(f"No candles returned for {mkt} at {url} with {tf}")
+                    print(f"No candles returned for {mkt} at {url} with {tf}")
                     continue
-                # Convert to DataFrame
+                # Convert to DataFrame with explicit column check
                 df = pd.DataFrame([{
-                    'started_at': candle['startedAt'],
-                    'open': float(candle['open']),
-                    'high': float(candle['high']),
-                    'low': float(candle['low']),
-                    'close': float(candle['close']),
-                    'base_token_volume': float(candle['baseTokenVolume'])
-                } for candle in data])
+                    'started_at': candle.get('startedAt', pd.NaT),
+                    'open': float(candle.get('open', 0)),
+                    'high': float(candle.get('high', 0)),
+                    'low': float(candle.get('low', 0)),
+                    'close': float(candle.get('close', 0)),
+                    'base_token_volume': float(candle.get('baseTokenVolume', 0))
+                } for candle in candles])
+                if df['started_at'].isna().all():
+                    logger.error(f"No valid 'startedAt' in data for {mkt}")
+                    print(f"No valid 'startedAt' in data for {mkt}")
+                    continue
                 df['started_at'] = pd.to_datetime(df['started_at'])
                 df = df.sort_values('started_at').reset_index(drop=True)
                 df['log_returns'] = np.log(df['close'] / df['close'].shift(1)).fillna(0)
@@ -77,7 +84,7 @@ def fetch_data(market='BTC-USD', timeframe=CANDLE_RESOLUTION, limit=200, indexer
 
 def save_to_db(df, market='BTC-USD', db_name='crypto_data.db'):
     """Save historical data to SQLite for backtesting."""
-    if df.empty:
+    if df.empty or 'started_at' not in df.columns:
         logger.warning(f"No data to save for {market}")
         print(f"No data to save for {market}")
         return
@@ -95,7 +102,7 @@ def save_to_db(df, market='BTC-USD', db_name='crypto_data.db'):
 def get_live_data(market='BTC-USD'):
     """Fetch latest candle for real-time trading."""
     df = fetch_data(market, limit=1)
-    if not df.empty:
+    if not df.empty and 'started_at' in df.columns:
         latest = df.iloc[-1]
         logger.info(f"Latest {market}: Close={latest['close']:.2f}, Volatility={latest['volatility']:.4f}")
         print(f"Latest {market}: Close={latest['close']:.2f}, Volatility={latest['volatility']:.4f}")
@@ -114,7 +121,6 @@ def fetch_all_data(markets=TRADING_MARKETS):
             print(f"Market {market} not available")
 
 if __name__ == "__main__":
-    # Test markets and fetch all
     available_markets = get_available_markets()
     fetch_all_data()
     hist_df = fetch_data('BTC-USD', limit=100)
